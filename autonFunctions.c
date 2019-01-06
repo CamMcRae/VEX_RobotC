@@ -1,4 +1,41 @@
 #include "utility.c"
+#include "punch.c"
+
+void setBaseLeft(float pwr){
+		pwr = clamp(pwr, -127, 127);
+		motor[baseLeft] = pwr;
+		motor[baseLeft_1] = pwr;
+}
+
+void setBaseRight(float pwr){
+		pwr = clamp(pwr, -127, 127);
+		motor[baseRight] = pwr;
+		motor[baseRight_1] = pwr;
+}
+
+void setBase(float leftPwr, float rightPwr){
+		leftPwr = clamp(leftPwr, -127, 127);
+		rightPwr = clamp(rightPwr, -127, 127);
+		motor[baseLeft] = leftPwr;
+		motor[baseLeft_1] = leftPwr;
+		motor[baseRight] = rightPwr;
+		motor[baseRight_1] = rightPwr;
+}
+
+void setBase(float pwr){
+		pwr = clamp(pwr, -127, 127);
+		motor[baseLeft] = pwr;
+		motor[baseLeft_1] = pwr;
+		motor[baseRight] = pwr;
+		motor[baseRight_1] = pwr;
+}
+
+// sets power to motors and powers for an amount of time
+void driveRaw(int ms, int power = 1) {
+	setBase(-127 * power);
+	wait1Msec(ms);
+	setBase(0);
+}
 
 void setIntake(int dir) {
 	motor[intake] = dir * 127;
@@ -6,6 +43,17 @@ void setIntake(int dir) {
 
 void setRoller(int dir) {
 	motor[roller] = dir * 127;
+}
+
+void hold(int ms) {
+	wait1Msec(ms);
+}
+
+// applies backtorque to wheels
+void backTorque(float dir) {
+	setBase(30 * dir);
+	hold(100);
+	setBase(0);
 }
 
 void pointTurn(int degrees, float power) {
@@ -107,116 +155,4 @@ void driveStraight(int distance, float power) {
 	wait1Msec(100);
 	motor[baseLeft]  = 0;
 	motor[baseRight]  = 0;
-}
-
-// turns to an angle, taking the shortest route
-void turnTo(float deg, float pwr = 1, float dir = 0) {
-	// ALL ANGLE VALUES ARE IN DEGREES
-
-  // clamps power between 0 and 1
-	pwr = clamp(pwr, 0, 1);
-
-	// PID Constants
-	float kP = 0.5;
-	float kI = 0.0;
-	float kD = 0.0;
-
-	float ILimit = 50;
-
-	// PID Vars
-	float error = 0;
-	float lastError = 0;
-	float integral = 0;
-	float derivative = 0;
-
-	do {
-
-		// PID works in relative angles. negative means left turn, positive is right.
-		error = angleBetween(deg, bot.angle);
-		// keeps integral within reason. Does not add unless error is less than limit
-		integral += abs(error) < 5 ? error : 0;
-		derivative = error - lastError;
-
-		// modifier
-		float modify = error * kP + integral * kI + derivative * kD;
-
-		motor[baseLeft] = 100 * pwr * modify;
-		motor[baseRight] = 100 * pwr * modify;
-		lastError = error;
-
-	// waits for error and last error to both be less than 1/2 a degree
-	} while(abs(error) < 0.5 && abs(lastError) < 0.5);
-}
-
-void driveTo(float x, float y, float pwr = 1, float dir = 1, float hold = false) {
-
-	// path following logic
-
-
-
-
-
-	// stoping logic
-	if (hold) {
-		backTorque(-dir);
-	}
-}
-
-
-
-// sets power to motors and powers for an amount of time
-void driveRaw(int ms, int power = 1) {
-	motor[baseLeft]  = -127 * power;
-	motor[baseRight] = -127 * power;
-	wait1Msec(ms);
-	motor[baseLeft] = 0;
-	motor[baseRight] = 0;
-}
-
-void hold(int ms) {
-	wait1Msec(ms);
-}
-
-// applies backtorque to wheels
-void backTorque(float dir) {
-	motor[baseLeft] = 30 * dir;
-	motor[baseRight] = 30 * dir;
-	hold(100);
-	motor[baseLeft] = 0;
-	motor[baseLeft] = 0;
-}
-
-// keeps track of robots position
-task odometry() {
-	while (true) {
-
-		float leftSen = SensorValue[leftBaseEnc];
-
-		bot.deltaLeft = leftSen/360.0 * (2 * bot.leftRadius * PI);
-
-		float rightSen = SensorValue[rightBaseEnc];
-
-		bot.deltaRight = rightSen/360.0 * (2 * bot.leftRadius * PI);
-
-		float backSen = SensorValue[backBaseEnc];
-
-		bot.deltaBack = backSen/360.0 * (2 * bot.leftRadius * PI);
-
-		float angle = (bot.deltaLeft - bot.deltaRight)/(bot.leftDist + bot.rightDist);
-
-		float trackingRadius = bot.deltaRight / angle + bot.rightDist;
-
-		float a = 2 * sin(angle / 2);
-
-		float deltaX = a * ((bot.deltaBack / angle) + bot.backDist);
-
-		float deltaY = a * ((bot.deltaRight / angle) + bot.rightDist);
-
-		bot.posX = bot.lastPosX + deltaX;
-
-		bot.posY = bot.lastPosY + deltaY;
-
-		bot.angle = bot.lastAngle + angle;
-		delay(20);
-	}
 }

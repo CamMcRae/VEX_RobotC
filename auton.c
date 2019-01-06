@@ -28,6 +28,10 @@ void blueFront_2() {
 	driveStraight(3, 1.0);
 }
 
+void blueBack_1() {}
+
+void blueBack_2() {}
+
 void redBack_1() {
 	setIntake(1);
 	driveStraight(3.5, 1.0);
@@ -35,6 +39,8 @@ void redBack_1() {
 	hold(200);
 	driveStraight(-4, 1.0);
 }
+
+void redBack_2() {}
 
 void redFront_1() {
 	punch.firePunch = true;
@@ -48,4 +54,8 @@ void redFront_1() {
 	driveStraight(3, 1.0);
 	hold(200);
 	driveStraight(-1, 1.0);
+}
+
+void redFront_2() {
+
 }

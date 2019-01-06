@@ -54,6 +54,6 @@ task puncherController() {
 }
 
 void shoot(bool turnOff = false) {
-		if (punch.off) punch.firePunch = true;
+		if (!punch.off) punch.firePunch = true;
 		punch.off = turnOff;
 }

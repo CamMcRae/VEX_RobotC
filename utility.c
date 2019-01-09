@@ -1,5 +1,3 @@
-#include "vector.c"
-
 // returns the min of 2 inputs
 float min(float a, float b) {
 	return (a < b ? a : b);
@@ -10,15 +8,20 @@ float max(float a, float b) {
 	return (a < b ? b : a);
 }
 
+// clamps a value between an upper and lower limit
+float clamp(float value, float lowerLimit, float upperLimit) {
+    return max(lowerLimit, min(value, upperLimit));
+}
+
+float map(float a, float in_min, float in_max, float out_min, float out_max) {
+	return (a - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+/*
 // returns the relative angle between the target coordinates
 // works in degrees
 float angleBetween(float target, float current) {
 	return ((target - current + 180) % 360) - 180;
-}
-
-// clamps a value between an upper and lower limit
-float clamp(float value, float lowerLimit, float upperLimit) {
-    return max(lowerLimit, min(value, upperLimit));
 }
 
 // returns the distance between 2 points
@@ -32,3 +35,4 @@ float distanceToLine(Vector p1, Vector p2, float x0, float y0) {
   float bottom = distance(p1, p2);
   return top / bottom;
 }
+*/

@@ -54,6 +54,18 @@ task puncherController() {
 }
 
 void shoot(bool turnOff = false) {
-		if (!punch.off) punch.firePunch = true;
+		if (punch.off) {
+			punch.off = false;
+		} else {
+			punch.firePunch = true;
+		}
 		punch.off = turnOff;
+}
+
+void waitForPunch() {
+	clearTimer(T2);
+	// waits for the punch to fire or for 1500 seconds if something has gone wrong
+	while(punch.firePunch || time1[T2] > 1500) {
+		wait1Msec(20);
+	}
 }

@@ -1,48 +1,45 @@
-#include "utility.c"
-#include "punch.c"
+float ticks2;
+float leftSen2;
+float rightSen2;
 
 void setBaseLeft(float pwr){
-	pwr = clamp(pwr, -127, 127);
-	motor[baseLeft] = pwr;
-	motor[baseLeft_1] = pwr;
+	pwr = (int) clamp(pwr, -127.0, 127.0);
+	motor[baseLeft] = motor[baseLeft_1] = pwr;
 }
 
 void setBaseRight(float pwr){
-	pwr = clamp(pwr, -127, 127);
-	motor[baseRight] = pwr;
-	motor[baseRight_1] = pwr;
+	pwr = (int) clamp(pwr, -127.0, 127.0);
+	motor[baseRight] = motor[baseRight_1] = pwr;
 }
 
 void setBase(float leftPwr, float rightPwr){
-	leftPwr = clamp(leftPwr, -127, 127);
-	rightPwr = clamp(rightPwr, -127, 127);
-	motor[baseLeft] = leftPwr;
-	motor[baseLeft_1] = leftPwr;
-	motor[baseRight] = rightPwr;
-	motor[baseRight_1] = rightPwr;
+	leftPwr = (int) clamp(leftPwr, -127, 127);
+	rightPwr = (int) clamp(rightPwr, -127, 127);
+	leftSen2 = leftPwr;
+	rightSen2 = rightPwr;
+	motor[baseLeft] = motor[baseLeft_1] = leftPwr;
+	motor[baseRight] = motor[baseRight_1] = rightPwr;
 }
 
 void setBase(float pwr){
-	pwr = clamp(pwr, -127, 127);
-	motor[baseLeft] = pwr;
-	motor[baseLeft_1] = pwr;
-	motor[baseRight] = pwr;
-	motor[baseRight_1] = pwr;
+	pwr = (int) clamp(pwr, -127, 127);
+	motor[baseLeft] = motor[baseLeft_1] = pwr;
+	motor[baseRight] = motor[baseRight_1] = pwr;
 }
 
 // sets power to motors and powers for an amount of time
-void driveRaw(int ms, int power = 1) {
-	setBase(-127 * power);
+void driveRaw(int ms, float power = 1) {
+	setBase(127 * power);
 	wait1Msec(ms);
 	setBase(0);
 }
 
 void setIntake(int dir) {
-	motor[intake] = dir * 127;
+	motor[intake] = -dir * 127;
 }
 
 void setRoller(int dir) {
-	motor[roller] = dir * 127;
+	motor[roller] = -dir * 127;
 }
 
 void hold(int ms) {
@@ -50,124 +47,108 @@ void hold(int ms) {
 }
 
 // applies backtorque to wheels
-void backTorque(float dir) {
-	setBase(30 * dir);
+void backTorque(float dir, float pwr = 1) {
+	setBase((int) 30 * pwr * dir);
 	hold(100);
 	setBase(0);
 }
 
 void backTorqueLeft(float dir) {
 	setBaseLeft(30 * dir);
-	hold(100);
+	hold(150);
 	setBaseLeft(0);
 }
 
 void backTorqueRight(float dir) {
 	setBaseRight(30 * dir);
-	hold(100);
+	hold(150);
 	setBaseRight(0);
 }
 
-void pointTurn(int degrees, float power) {
+void backTorque2(float lDir, float rDir) {
+	setBase(30 * lDir, 30 * rDir);
+	hold(150);
+	setBase(0);
+}
 
+void pointTurn(int degrees, float power = 0.5, int maxTime = -1) {
+
+	// finds which way to spin the wheels
 	int dir = sgn(degrees);
+
+	// calculates a max time to prevent infinite loops (30 * degrees + 1000) milliseconds
+	if (maxTime == -1) maxTime = abs(degrees) * 30 + 1000;
 
 	// Reset encoders
 	SensorValue[leftBaseEnc] = 0;
 	SensorValue[rightBaseEnc] = 0;
 
-	float arcLength = degreesToRadians(degrees) * 5.6;
+	// calculates ticks to turn encoders
+	float ticks = (31 * abs(degrees)) / 10.0;
+	ticks2 = ticks;
 
-	int ticks = arcLength / (PI * 4.0) * 360.0;
+	// PID constants
+	// something around this value
+	float Kp = 0.9;
+	float Kd = 0.1;
 
-	// starts motors
-	setBase(dir * power * 100, -dir * power * 100);
+	//Kd = 0;
 
-	if (dir > 0) { // right turn
-		bool exit1 = false;
-		bool exit2 = false;
-		while (!exit1 && !exit2) {
-			if (SensorValue[leftBaseEnc] > ticks){
-				setBaseLeft(dir * power * 100);
-				exit1 = true;
-			}
-			if (-SensorValue[rightBaseEnc] > ticks){
-				setBaseRight(-dir * power * 100);
-				exit2 = true;
-			}
-		}
-		} else { // left turn
-		bool exit1 = false;
-		bool exit2 = false;
-		while (!exit1 && !exit2) {
-			if (SensorValue[leftBaseEnc] < -ticks){
-				setBaseLeft(dir * power * 100);
-				exit1 = true;
-			}
-			if (SensorValue[rightBaseEnc] > ticks){
-				setBaseRight(-dir * power * 100);
-				exit2 = true;
-			}
-		}
+	// PID variables
+	float error = 0;
+	float lastError = 0;
+	float derivative = 0;
+
+	// sensorvalues to not do multiple encoder reads in a loop
+	int leftSen = 0;
+	int rightSen = 0;
+
+	// resets infinite loop timer
+	clearTimer(T1);
+
+	while (true) {
+
+		// timer exit condition
+		if (time1[T1] > maxTime) break;
+
+		// sensor reading
+		leftSen = -SensorValue[leftBaseEnc] * dir;
+		leftSen2 = leftSen;
+		rightSen = SensorValue[rightBaseEnc] * dir;
+		rightSen2= rightSen;
+
+		datalogDataGroupStart();
+		datalogAddValue(0, abs(leftSen2));
+		datalogAddValue(1, abs(rightSen2));
+		datalogDataGroupEnd();
+
+		// left and right powers
+		float leftPwr;
+
+		float rightPwr;
+
+		if (abs(leftSen) > ticks) break;
+
+		error = abs(leftSen) - abs(rightSen);
+
+		derivative = error - lastError;
+
+		leftPwr = 100 * power;
+
+		float modify = (error * Kp) + (derivative * Kd);
+
+		rightPwr = leftPwr + modify;
+
+		setBase(leftPwr * dir, -rightPwr * dir);
+
+		lastError = error;
+		delay(25);
 	}
-	// zero motors
-	setBase(-30, 30);
-	wait1Msec(80);
+	backTorque2(-dir, dir);
 	setBase(0);
 }
 
-// function to use when driving
-void driveStraight(int distance, float power) {
-
-	// reset sensors
-	SensorValue(leftBaseEnc) = 0;
-	SensorValue(rightBaseEnc) = 0;
-
-	// calculate ticks
-	float ticks = abs(distance) / (PI * 4.5/12.0) * 360.0;
-
-	float Kp = 0.1;
-	/*float Ki = 0.1;
-	float Kd = 0.5;
-	float Ilimit = 80;*/
-
-	float lastError = 0;
-	float error = 0;
-
-	int leftSen = SensorValue[leftBaseEnc];
-	int rightSen = -SensorValue[rightBaseEnc];
-
-	// only runs loop while left is less than target ticks
-	while (leftSen < ticks) {
-		leftSen = SensorValue[leftBaseEnc] * sgn(distance);
-		rightSen = -SensorValue[rightBaseEnc] * sgn(distance);
-
-		// error is the differance in ticks
-		error = leftSen - rightSen;
-
-		// calculates motor power
-		float leftPwr = -100 * power;
-		float rightPwr = leftPwr + (error * Kp);
-
-		// updates motor powers
-		motor[baseLeft]  = leftPwr * sgn(distance);
-
-		motor[baseRight] = rightPwr * sgn(distance);
-
-		lastError = error;
-		delay(20);
-	}
-
-	// zero motors
-	motor[baseLeft]  = 30 * sgn(distance);
-	motor[baseRight] = 30 * sgn(distance);
-	wait1Msec(100);
-	motor[baseLeft]  = 0;
-	motor[baseRight]  = 0;
-}
-
-
-void driveStraight2(int distance, float power, bool hold = false, int maxTime = -1) {
+void driveStraight(float distance, float power, bool hold = false, int maxTime = -1) {
 
 	int dir = sgn(distance);
 
@@ -176,74 +157,99 @@ void driveStraight2(int distance, float power, bool hold = false, int maxTime = 
 	SensorValue(rightBaseEnc) = 0;
 
 	// calculate ticks
-	float ticks = abs(distance) / (PI * 4.5/12.0) * 360.0;
+	float ticks = (abs(distance)  * 12.0) / (PI * 5.5) * 360.0;
+	ticks2 = ticks;
+	if (maxTime < 0) maxTime = abs(distance) * 1000 + 1500; // 1 foot per second plus 1.5 seconds
 
-	if (maxTime < 0) maxTime = distance * 1000 + 1500; // 1 foot per second plus 1.5 seconds
+	float Kp = 0.0065; //0.025;
+	Kp = 0.025;
+	//Kp = 0.0005;
+	float Kd = 0.07; //higher than 0.7, less than 1
 
-	float Kp = 0.0007;
-	float Kd = 0.08; //higher than 0.7, less than 1
-
-	float lastError = 0;
+	Kd = 0;
 	float error = 0;
-	float derivative;
+	float lastError = 0;
+	float derivative = 0;
 
-	int leftSen = SensorValue[leftBaseEnc];
-	int rightSen = -SensorValue[rightBaseEnc];
-/*
+	int leftSen = 0;
+	int rightSen = 0;
+	/*
 	bool leftRun = true;
 	bool rightRun = true;
-*/
+	*/
 	// only runs loop while left is less than target ticks
 	clearTimer(T1);
-	while (leftSen < ticks) {
+	while (abs(leftSen) <= ticks) {
 
 		// stop infinite loops and allows to run into walls, and it will exit automatically
 		if (time1(T1) > maxTime) break;
 
-		leftSen = SensorValue[leftBaseEnc] * dir;
-		rightSen = -SensorValue[rightBaseEnc] * dir;
-
+		leftSen = -SensorValue[leftBaseEnc] * dir;
+		leftSen2 = leftSen;
+		rightSen = SensorValue[rightBaseEnc] * dir;
+		rightSen2 = rightSen;
 		/*// applies back torque when left has reached destination
 		if (leftRun && leftSen > ticks) {
-			if (hold) {
-				backTorqueLeft(-dir);
-				setBaseLeft(10);
-			}
-			leftRun = false;
+		if (hold) {
+		backTorqueLeft(-dir);
+		setBaseLeft(10);
+		}
+		leftRun = false;
 		}
 
 		// applies back torque when right has reached destination
 		if (rightRun && rightSen > ticks) {
-			if (hold) {
-				backTorqueLeft(-dir);
-				setBaseLeft(10);
-			}
-			rightRun = false;
+		if (hold) {
+		backTorqueLeft(-dir);
+		setBaseLeft(10);
+		}
+		rightRun = false;
 		}
 		// breaks loop when both have reached destination
 		if (leftSen > ticks && rightSen > ticks) break;
 
 		// error is the difference in ticks
 		error = leftSen - rightSen;
-*/
+		*/
 
-		error = leftSen - rightSen;
+		float leftPwr;
 
-		derivative = error - lastError;
+		float rightPwr;
 
-		float leftPwr = -100 * power * dir;
+		if (dir > 0) {
 
-		float modify = (error * Kp) + (derivative * Kd)
+			error = abs(leftSen) - abs(rightSen);
 
-		float rightPwr = leftPwr + modify;
+			derivative = error - lastError;
 
+			leftPwr = 100 * power;
 
-		setBase(leftPwr, rightPwr);
+			float modify = (error * Kp) + (derivative * Kd);
+
+			rightPwr = leftPwr + modify;
+
+			} else {
+
+			error =  abs(rightSen) - abs(leftSen);
+
+			derivative = error - lastError;
+
+			rightPwr = 100 * power;
+
+			float modify = (error * Kp) + (derivative * Kd);
+
+			leftPwr = rightPwr - modify;
+
+		}
+
+		setBase(leftPwr * dir, rightPwr * dir);
 
 		lastError = error;
-		delay(20);
+		delay(25);
 	}
 	if (hold) {
 		backTorque(-dir);
+		} else {
+		setBase(0);
 	}
 }

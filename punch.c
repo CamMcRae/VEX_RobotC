@@ -10,9 +10,7 @@ typedef struct{
 linearPuncher punch;
 
 void setPunch(float pwr) {
-	motor[punch_1] = pwr;
-	motor[punch_2] = pwr;
-	motor[punch_3] = pwr;
+	motor[punch_1] = motor[punch_2] = motor[punch_3] = pwr;
 }
 
 task puncherController() {
@@ -22,8 +20,8 @@ task puncherController() {
 	punch.inPosition = false;
 	punch.reset = false;
 	punch.lastValue = false;
-	punch.power = 75;
-	punch.off = false;
+	punch.power = 90;
+	punch.off = true;
 
 	while (true) {
 
@@ -43,7 +41,7 @@ task puncherController() {
 			if (!punch.reset) {
 				setPunch(punch.power);
 				} else {
-				setPunch(30);
+				setPunch(25);
 			}
 		} else {
 				setPunch(0);
@@ -58,14 +56,16 @@ void shoot(bool turnOff = false) {
 			punch.off = false;
 		} else {
 			punch.firePunch = true;
+			punch.off = turnOff;
 		}
-		punch.off = turnOff;
 }
 
+// blocking function to stop other autonomous functions while the punch is firing
 void waitForPunch() {
 	clearTimer(T2);
-	// waits for the punch to fire or for 1500 seconds if something has gone wrong
-	while(punch.firePunch || time1[T2] > 1500) {
+	// waits for the punch to fire or for 2.5 seconds if something has gone wrong and the punch is unable to fire
+	while(punch.firePunch) {
+		if (time1[T2] > 2500) break;
 		wait1Msec(20);
 	}
 }
